@@ -264,7 +264,6 @@
       <div class="count" id="adminCount">0 entries</div>
     </div>
     <div class="admin-actions">
-      <button class="primary" id="exportBtn">Export CSV</button>
       <button id="refreshBtn">Refresh</button>
     </div>
     <div id="adminTableWrap"><div class="empty-admin">No submissions yet</div></div>
@@ -418,9 +417,6 @@ function downloadCSV(entries){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-document.getElementById('revealExportBtn').addEventListener('click', async () => {
-  downloadCSV(await getEntries());
-});
 
 /* Alt + Shift + L = export all submissions */
 window.addEventListener('keydown', (e) => {
@@ -487,9 +483,111 @@ document.getElementById('closeAdmin').addEventListener('click', () => {
 });
 document.getElementById('refreshBtn').addEventListener('click', loadAdmin);
 
-document.getElementById('exportBtn').addEventListener('click', async () => {
-  downloadCSV(await getEntries());
+
+/* PRIVATE ADMIN EXPORT
+   Shortcut: Alt + Shift + L
+   Then enter the private PIN.
+   Change ADMIN_PIN before deployment.
+*/
+const ADMIN_PIN = 'CHANGE-THIS-PIN';
+
+function downloadCSV(entries){
+  if(!Array.isArray(entries) || entries.length === 0){
+    alert('No submissions available.');
+    return;
+  }
+
+  const escapeCSV = (value) =>
+    '"' + String(value ?? '').replace(/"/g, '""') + '"';
+
+  const header = ['roll_number','name','email','academic_year','timestamp'];
+  const rows = entries.map(e => [
+    e.roll_number,
+    e.name,
+    e.email,
+    e.academic_year,
+    e.ts ? new Date(e.ts).toISOString() : ''
+  ].map(escapeCSV).join(','));
+
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+
+  a.href = url;
+  a.download = 'student_registrations.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function getAllEntriesForAdmin(){
+  try{
+    if(window.storage && typeof window.storage.get === 'function'){
+      const r = await window.storage.get(STORAGE_KEY, true);
+      return r ? JSON.parse(r.value) : [];
+    }
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  }catch(e){
+    console.error('Could not read registrations:', e);
+    return [];
+  }
+}
+
+/* Hidden admin trigger — not shown anywhere in the UI. */
+window.addEventListener('keydown', async (e) => {
+  if(e.altKey && e.shiftKey && e.key.toLowerCase() === 'l'){
+    e.preventDefault();
+
+    const pin = window.prompt('Admin access');
+    if(pin === null) return;
+
+    if(pin !== ADMIN_PIN){
+      alert('Access denied.');
+      return;
+    }
+
+    const entries = await getAllEntriesForAdmin();
+    downloadCSV(entries);
+  }
 });
+
+
+/* Hidden mobile admin trigger:
+   Tap the main title 7 times quickly, then enter the private PIN. */
+const adminTitle = document.querySelector('.card h1');
+let adminTapCount = 0;
+let adminTapTimer = null;
+
+if(adminTitle){
+  adminTitle.addEventListener('click', async () => {
+    adminTapCount++;
+
+    clearTimeout(adminTapTimer);
+    adminTapTimer = setTimeout(() => {
+      adminTapCount = 0;
+    }, 1800);
+
+    if(adminTapCount >= 7){
+      adminTapCount = 0;
+      clearTimeout(adminTapTimer);
+
+      const pin = window.prompt('Admin access');
+      if(pin === null) return;
+
+      if(pin !== ADMIN_PIN){
+        alert('Access denied.');
+        return;
+      }
+
+      const entries = await getAllEntriesForAdmin();
+      downloadCSV(entries);
+    }
+  });
+}
+
 </script>
 </body>
 </html>
