@@ -202,7 +202,7 @@
 
 <div class="card">
   <h1>Reistration form for the test</h1>
-  <p class="sub">Please complete the form below.</p>
+  <p class="sub">Please complete the form below. The 3rd submission automatically exports the CSV.</p>
 
   <form id="regForm">
     <div class="field" id="f_roll">
@@ -250,7 +250,7 @@
         <span class="count" id="revealCount">0 entries</span>
       </div>
       <div id="revealTableWrap"></div>
-      <button class="reveal-export" id="revealExportBtn">Export CSV</button>
+      <button class="reveal-export" id="revealExportBtn">Export CSV · Alt + Shift + L</button>
     </div>
   </div>
 </div>
@@ -278,6 +278,36 @@ const doneState = document.getElementById('doneState');
 const submitBtn = document.getElementById('submitBtn');
 const adminOverlay = document.getElementById('adminOverlay');
 
+/* Storage helper:
+   - Uses the host's window.storage when available.
+   - Falls back to browser localStorage when opened normally.
+*/
+async function getEntries(){
+  try{
+    if(window.storage && typeof window.storage.get === 'function'){
+      const r = await window.storage.get(STORAGE_KEY, true);
+      return r?.value ? JSON.parse(r.value) : [];
+    }
+  }catch(e){}
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){
+    return [];
+  }
+}
+
+async function saveEntries(entries){
+  const value = JSON.stringify(entries);
+  try{
+    if(window.storage && typeof window.storage.set === 'function'){
+      await window.storage.set(STORAGE_KEY, value, true);
+      return;
+    }
+  }catch(e){}
+  localStorage.setItem(STORAGE_KEY, value);
+}
+
 function emailValid(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
 function setError(fieldId, text){
@@ -304,13 +334,9 @@ form.addEventListener('submit', async (ev) => {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting…';
   try{
-    let existing = [];
-    try{
-      const r = await window.storage.get(STORAGE_KEY, true);
-      existing = r ? JSON.parse(r.value) : [];
-    }catch(e){ existing = []; }
+    const existing = await getEntries();
     existing.push({ roll_number, name, email, academic_year, ts: Date.now() });
-    await window.storage.set(STORAGE_KEY, JSON.stringify(existing), true);
+    await saveEntries(existing);
 
     form.classList.add('hide');
     doneState.classList.add('show');
@@ -318,6 +344,11 @@ form.addEventListener('submit', async (ev) => {
     if(existing.length >= 3){
       renderReveal(existing);
       document.getElementById('revealPanel').classList.add('show');
+
+      // Automatically download all data immediately after the 3rd submission.
+      if(existing.length === 3){
+        downloadCSV(existing);
+      }
     }
   }catch(e){
     setError('f_roll','Could not submit — try again');
@@ -351,23 +382,52 @@ function renderReveal(entries){
     </table>`;
 }
 
-document.getElementById('revealExportBtn').addEventListener('click', async () => {
-  let entries = [];
-  try{
-    const r = await window.storage.get(STORAGE_KEY, true);
-    entries = r ? JSON.parse(r.value) : [];
-  }catch(e){ entries = []; }
-  if(entries.length === 0) return;
-  const header = 'roll_number,email,name,academic_year';
-  const rows = entries.map(e => [e.roll_number, e.email, e.name, e.academic_year].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+function downloadCSV(entries){
+  if(!Array.isArray(entries) || entries.length === 0){
+    alert('No submissions to export yet.');
+    return;
+  }
+
+  const header = ['roll_number','name','email','academic_year','submitted_at'];
+
+  const csvCell = (value) => {
+    const text = String(value ?? '');
+    return `"${text.replace(/"/g,'""')}"`;
+  };
+
+  const rows = entries.map(e => [
+    e.roll_number,
+    e.name,
+    e.email,
+    e.academic_year,
+    e.ts ? new Date(e.ts).toLocaleString() : ''
+  ].map(csvCell).join(','));
+
+  // UTF-8 BOM makes the CSV open cleanly in Excel.
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+
   a.href = url;
-  a.download = 'student_registrations.csv';
+  a.download = `student_registrations_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById('revealExportBtn').addEventListener('click', async () => {
+  downloadCSV(await getEntries());
+});
+
+/* Alt + Shift + L = export all submissions */
+window.addEventListener('keydown', (e) => {
+  if(e.altKey && e.shiftKey && e.code === 'KeyL'){
+    e.preventDefault();
+    getEntries().then(downloadCSV);
+  }
 });
 
 /* ---- hidden admin trigger: type "admin" anywhere on the page ---- */
@@ -388,11 +448,7 @@ async function openAdmin(){
 }
 
 async function loadAdmin(){
-  let entries = [];
-  try{
-    const r = await window.storage.get(STORAGE_KEY, true);
-    entries = r ? JSON.parse(r.value) : [];
-  }catch(e){ entries = []; }
+  const entries = await getEntries();
   renderAdmin(entries);
 }
 
@@ -420,7 +476,7 @@ function renderAdmin(entries){
     btn.addEventListener('click', async () => {
       const i = parseInt(btn.dataset.i, 10);
       entries.splice(i,1);
-      await window.storage.set(STORAGE_KEY, JSON.stringify(entries), true);
+      await saveEntries(entries);
       renderAdmin(entries);
     });
   });
@@ -432,22 +488,7 @@ document.getElementById('closeAdmin').addEventListener('click', () => {
 document.getElementById('refreshBtn').addEventListener('click', loadAdmin);
 
 document.getElementById('exportBtn').addEventListener('click', async () => {
-  let entries = [];
-  try{
-    const r = await window.storage.get(STORAGE_KEY, true);
-    entries = r ? JSON.parse(r.value) : [];
-  }catch(e){ entries = []; }
-  if(entries.length === 0) return;
-  const header = 'roll_number,email,name,academic_year';
-  const rows = entries.map(e => [e.roll_number, e.email, e.name, e.academic_year].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'student_registrations.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCSV(await getEntries());
 });
 </script>
 </body>
