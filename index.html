@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Enrollment</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --text:#1a1a1a;
+    --muted:#6b6b6b;
+    --line:#d8d8d8;
+    --line-strong:#1a1a1a;
+    --error:#a33;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:Georgia,'Times New Roman',serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:6vh 6vw;
+  }
+
+  .card{
+    width:100%;
+    max-width:480px;
+    position:relative;
+    border:2px solid var(--line-strong);
+    padding:52px 44px;
+  }
+  .card::before{
+    content:'';
+    position:absolute;
+    inset:8px;
+    border:1px solid var(--line-strong);
+    pointer-events:none;
+  }
+
+  @media (max-width:480px){
+    .card{ padding:36px 22px; }
+    .card::before{ inset:6px; }
+  }
+
+  h1{
+    font-size:clamp(24px,4vw,30px);
+    font-weight:400;
+    margin:0 0 6px;
+    text-align:center;
+  }
+  .sub{
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+    margin:0 0 44px;
+    font-family:Arial,Helvetica,sans-serif;
+  }
+
+  form{ display:grid; gap:26px; }
+  .field{ position:relative; }
+  label{
+    display:block;
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  input, select{
+    width:100%;
+    font-family:Georgia,serif;
+    font-size:16px;
+    padding:8px 0 10px;
+    background:transparent;
+    border:none;
+    border-bottom:1px solid var(--line);
+    color:var(--text);
+    outline:none;
+    appearance:none;
+    -webkit-appearance:none;
+    border-radius:0;
+    transition:border-color .15s ease;
+  }
+  select{ cursor:pointer; }
+  input::placeholder{ color:#bbb; }
+  input:focus, select:focus{ border-bottom:1px solid var(--line-strong); }
+  .field.err input, .field.err select{ border-bottom-color:var(--error); }
+  .msg{
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:12px;
+    color:var(--error);
+    min-height:16px;
+    margin-top:5px;
+  }
+  .chevron{
+    position:absolute; right:2px; bottom:13px;
+    pointer-events:none; color:var(--muted); font-size:11px;
+  }
+
+  button[type="submit"]{
+    margin-top:10px;
+    width:100%;
+    padding:13px;
+    background:var(--text);
+    color:#fff;
+    border:none;
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:13.5px;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    transition:opacity .15s ease;
+  }
+  button[type="submit"]:hover{ opacity:0.85; }
+  button[type="submit"]:disabled{ opacity:0.5; cursor:default; }
+
+  form.hide{ display:none; }
+
+  .done{ display:none; text-align:center; padding:20px 0 4px; }
+  .done.show{ display:block; }
+  .done h2{ font-size:20px; font-weight:400; margin:0 0 8px; }
+  .done p{ color:var(--muted); font-size:14px; margin:0 0 26px; font-family:Arial,Helvetica,sans-serif; }
+  .again{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 18px;
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .again:hover{ border-color:var(--line-strong); }
+
+  /* ---- hidden admin overlay ---- */
+  .admin-overlay{
+    display:none; position:fixed; inset:0;
+    background:rgba(255,255,255,0.98);
+    z-index:50; padding:6vh 5vw; overflow-y:auto;
+  }
+  .admin-overlay.show{ display:block; }
+  .admin-box{ max-width:760px; margin:0 auto; position:relative; }
+  .admin-top{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:22px; border-bottom:1px solid var(--line-strong); padding-bottom:14px;
+  }
+  .admin-top h2{ margin:0; font-size:19px; font-weight:400; }
+  .admin-top .count{ font-family:Arial,sans-serif; font-size:12px; color:var(--muted); }
+  .admin-actions{ display:flex; gap:10px; margin-bottom:20px; }
+  .admin-actions button{
+    font-family:Arial,sans-serif; font-size:12px; padding:8px 14px;
+    cursor:pointer; border:1px solid var(--line-strong);
+    background:transparent; color:var(--text);
+  }
+  .admin-actions button.primary{ background:var(--text); color:#fff; }
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left; font-family:Arial,sans-serif; font-size:11px;
+    color:var(--muted); padding:8px 6px; border-bottom:1px solid var(--line-strong);
+  }
+  tbody td{ padding:10px 6px; font-size:14px; border-bottom:1px solid var(--line); font-family:Arial,sans-serif; }
+  .del{ background:none; border:none; color:var(--error); font-family:Arial,sans-serif; font-size:12px; cursor:pointer; }
+  .empty-admin{ text-align:center; color:var(--muted); padding:30px 0; font-size:14px; font-family:Arial,sans-serif; }
+  .close-admin{
+    position:absolute; top:-2px; right:0; background:none; border:none;
+    color:var(--muted); font-size:22px; cursor:pointer; line-height:1;
+  }
+
+  /* ---- inline reveal panel (shows after the 3rd submission) ---- */
+  .reveal{
+    display:none;
+    margin-top:34px;
+    padding-top:26px;
+    border-top:1px solid var(--line);
+    text-align:left;
+  }
+  .reveal.show{ display:block; }
+  .reveal-top{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:16px;
+  }
+  .reveal-top h3{ margin:0; font-size:15px; font-weight:400; font-family:Arial,Helvetica,sans-serif; }
+  .reveal-top .count{ font-family:Arial,sans-serif; font-size:11.5px; color:var(--muted); }
+  .reveal table{ font-size:12.5px; }
+  .reveal-export{
+    margin-top:16px;
+    width:100%;
+    padding:10px;
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line-strong);
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:12.5px;
+    letter-spacing:0.3px;
+    cursor:pointer;
+  }
+  .reveal-export:hover{ background:var(--text); color:#fff; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Reistration form for the test</h1>
+  <p class="sub">Please complete the form below.</p>
+
+  <form id="regForm">
+    <div class="field" id="f_roll">
+      <label for="roll_number">Roll number</label>
+      <input type="text" id="roll_number" placeholder="25095A3330" autocomplete="off">
+      <div class="msg"></div>
+    </div>
+
+    <div class="field" id="f_name">
+      <label for="name">Name</label>
+      <input type="text" id="name" placeholder="Full name" autocomplete="off">
+      <div class="msg"></div>
+    </div>
+
+    <div class="field" id="f_email">
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="off">
+      <div class="msg"></div>
+    </div>
+
+    <div class="field" id="f_year">
+      <label for="academic_year">Academic year</label>
+      <select id="academic_year">
+        <option value="" disabled selected>Select year</option>
+        <option value="1">1st year</option>
+        <option value="2">2nd year</option>
+        <option value="3">3rd year</option>
+        <option value="4">4th year</option>
+      </select>
+      <span class="chevron">▾</span>
+      <div class="msg"></div>
+    </div>
+
+    <button type="submit" id="submitBtn">Submit</button>
+  </form>
+
+  <div class="done" id="doneState">
+    <h2>You're registered</h2>
+    <p>Thank you — your details have been recorded.</p>
+    <button class="again" id="againBtn">Submit another</button>
+
+    <div class="reveal" id="revealPanel">
+      <div class="reveal-top">
+        <h3>All submissions</h3>
+        <span class="count" id="revealCount">0 entries</span>
+      </div>
+      <div id="revealTableWrap"></div>
+      <button class="reveal-export" id="revealExportBtn">Export CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- hidden admin view: type "admin" anywhere on the page to open -->
+<div class="admin-overlay" id="adminOverlay">
+  <div class="admin-box">
+    <button class="close-admin" id="closeAdmin">&times;</button>
+    <div class="admin-top">
+      <h2>All submissions</h2>
+      <div class="count" id="adminCount">0 entries</div>
+    </div>
+    <div class="admin-actions">
+      <button class="primary" id="exportBtn">Export CSV</button>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+    <div id="adminTableWrap"><div class="empty-admin">No submissions yet</div></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'student-registrations';
+const form = document.getElementById('regForm');
+const doneState = document.getElementById('doneState');
+const submitBtn = document.getElementById('submitBtn');
+const adminOverlay = document.getElementById('adminOverlay');
+
+function emailValid(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+function setError(fieldId, text){
+  const f = document.getElementById(fieldId);
+  f.classList.toggle('err', !!text);
+  f.querySelector('.msg').textContent = text || '';
+}
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const roll_number = document.getElementById('roll_number').value.trim();
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const academic_year = document.getElementById('academic_year').value;
+
+  setError('f_roll',''); setError('f_name',''); setError('f_email',''); setError('f_year','');
+  let ok = true;
+  if(!roll_number){ setError('f_roll','Required'); ok = false; }
+  if(!name){ setError('f_name','Required'); ok = false; }
+  if(!email || !emailValid(email)){ setError('f_email','Enter a valid email'); ok = false; }
+  if(!academic_year){ setError('f_year','Required'); ok = false; }
+  if(!ok) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting…';
+  try{
+    let existing = [];
+    try{
+      const r = await window.storage.get(STORAGE_KEY, true);
+      existing = r ? JSON.parse(r.value) : [];
+    }catch(e){ existing = []; }
+    existing.push({ roll_number, name, email, academic_year, ts: Date.now() });
+    await window.storage.set(STORAGE_KEY, JSON.stringify(existing), true);
+
+    form.classList.add('hide');
+    doneState.classList.add('show');
+
+    if(existing.length >= 3){
+      renderReveal(existing);
+      document.getElementById('revealPanel').classList.add('show');
+    }
+  }catch(e){
+    setError('f_roll','Could not submit — try again');
+  }finally{
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit';
+  }
+});
+
+document.getElementById('againBtn').addEventListener('click', () => {
+  form.reset();
+  doneState.classList.remove('show');
+  form.classList.remove('hide');
+  document.getElementById('revealPanel').classList.remove('show');
+});
+
+function renderReveal(entries){
+  document.getElementById('revealCount').textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
+  const wrap = document.getElementById('revealTableWrap');
+  const rows = entries.map(e => `
+    <tr>
+      <td>${e.roll_number}</td>
+      <td>${e.name}</td>
+      <td>${e.email}</td>
+      <td>${e.academic_year}</td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Roll number</th><th>Name</th><th>Email</th><th>Year</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+document.getElementById('revealExportBtn').addEventListener('click', async () => {
+  let entries = [];
+  try{
+    const r = await window.storage.get(STORAGE_KEY, true);
+    entries = r ? JSON.parse(r.value) : [];
+  }catch(e){ entries = []; }
+  if(entries.length === 0) return;
+  const header = 'roll_number,email,name,academic_year';
+  const rows = entries.map(e => [e.roll_number, e.email, e.name, e.academic_year].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'student_registrations.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ---- hidden admin trigger: type "admin" anywhere on the page ---- */
+let keyBuffer = '';
+window.addEventListener('keydown', (e) => {
+  if(e.key.length === 1){
+    keyBuffer = (keyBuffer + e.key).slice(-5).toLowerCase();
+    if(keyBuffer === 'admin'){
+      openAdmin();
+      keyBuffer = '';
+    }
+  }
+});
+
+async function openAdmin(){
+  adminOverlay.classList.add('show');
+  await loadAdmin();
+}
+
+async function loadAdmin(){
+  let entries = [];
+  try{
+    const r = await window.storage.get(STORAGE_KEY, true);
+    entries = r ? JSON.parse(r.value) : [];
+  }catch(e){ entries = []; }
+  renderAdmin(entries);
+}
+
+function renderAdmin(entries){
+  document.getElementById('adminCount').textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
+  const wrap = document.getElementById('adminTableWrap');
+  if(entries.length === 0){
+    wrap.innerHTML = '<div class="empty-admin">No submissions yet</div>';
+    return;
+  }
+  const rows = entries.map((e,i) => `
+    <tr>
+      <td>${e.roll_number}</td>
+      <td>${e.name}</td>
+      <td>${e.email}</td>
+      <td>${e.academic_year}</td>
+      <td><button class="del" data-i="${i}">remove</button></td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Roll number</th><th>Name</th><th>Email</th><th>Year</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  wrap.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const i = parseInt(btn.dataset.i, 10);
+      entries.splice(i,1);
+      await window.storage.set(STORAGE_KEY, JSON.stringify(entries), true);
+      renderAdmin(entries);
+    });
+  });
+}
+
+document.getElementById('closeAdmin').addEventListener('click', () => {
+  adminOverlay.classList.remove('show');
+});
+document.getElementById('refreshBtn').addEventListener('click', loadAdmin);
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  let entries = [];
+  try{
+    const r = await window.storage.get(STORAGE_KEY, true);
+    entries = r ? JSON.parse(r.value) : [];
+  }catch(e){ entries = []; }
+  if(entries.length === 0) return;
+  const header = 'roll_number,email,name,academic_year';
+  const rows = entries.map(e => [e.roll_number, e.email, e.name, e.academic_year].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'student_registrations.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
